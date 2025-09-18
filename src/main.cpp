@@ -127,23 +127,21 @@ int main()
         std::cout << "Warning: Anti-aliasing not supported on this system" << std::endl;
     }
     
-    // 构建和编译着色器程序
-    std::cout << "=== 白色阴影渲染器 ===" << std::endl;
-    std::cout << "控制说明:" << std::endl;
-    std::cout << "ESC键: 退出程序" << std::endl;
-    std::cout << "WASD键: 移动摄像机 (前后左右)" << std::endl;
-    std::cout << "QE键: 摄像机上下移动" << std::endl;
-    std::cout << "鼠标左键拖拽: 旋转视角" << std::endl;
-    std::cout << "滚轮: 缩放视图" << std::endl;
-    std::cout << "R键: 重置摄像机位置" << std::endl;
-    std::cout << "===================" << std::endl;
+    // Descriptions
+    std::cout << "Shortcut description:" << std::endl;
+    std::cout << "ESC: Exit" << std::endl;
+    std::cout << "W/A/S/D: move camera" << std::endl;
+    std::cout << "QE: move camera up/down" << std::endl;
+    std::cout << "left mouse key: rotate view" << std::endl;
+    std::cout << "scroll wheel: zoom view" << std::endl;
+    std::cout << "R: reset camera position" << std::endl;
     
     // Load shaders
     unsigned int toonShader = loadShader("./src/shaders/toon.vert", "./src/shaders/toon.frag");
     unsigned int outlineShader = loadShader("./src/shaders/outline.vert", "./src/shaders/outline.frag");
 
     // Load multiple models
-    chem::Xyz xyz = chem::Xyz("./caffeine.xyz");
+    chem::Xyz xyz = chem::Xyz("./benzene.xyz");
     std::vector<model::Model> models = model::loadMoleculeModel(xyz);
     
     // Get geometric center of molecule
