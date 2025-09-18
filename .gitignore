@@ -2,6 +2,9 @@ build/
 dat/*py
 caffeine.xyz
 
+# VSCode
+.vscode/
+
 # Prerequisites
 *.d
 
