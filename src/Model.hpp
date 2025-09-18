@@ -14,7 +14,7 @@
 
 const float VDWR_SCALING_RATIO = 0.2f;
 const float BOND_RADIUS = 0.05f;
-const int ATOM_MODEL_RESOLUTION = 8;
+const int ATOM_MODEL_RESOLUTION = 16;
 const int BOND_MODEL_RESOLUTION = 8;
 
 namespace model{

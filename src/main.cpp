@@ -67,6 +67,9 @@ const bool USE_DIRECTIONAL_LIGHT = true;                               // false 
 const glm::vec3 POINT_LIGHT_POS = glm::vec3(1.2f, 1.0f, 2.0f);          // Point light position
 const glm::vec3 DIRECTIONAL_LIGHT_DIR = glm::vec3(-0.5f, -0.5f, -0.5f); // Directional light direction
 
+// Outline settings
+const double OUTLINE_SIZE = 0.05;
+
 int main()
 {
     // Initialize GLFW
@@ -79,7 +82,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Enable anti-aliasing with 4x MSAA
-    glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_SAMPLES, 16);
 
     // Create window
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Toon Shading Example", NULL, NULL);
@@ -145,8 +148,6 @@ int main()
 
     // Get geometric center of molecule
     std::array<double, 3> geom_center = xyz.getGeomCenter();
-    std::cout << geom_center[0] << " " << geom_center[1] << " " << geom_center[2] << std::endl;
-    // moleculeCenter = glm::vec3(geom_center[0], geom_center[1], geom_center[2]);
 
     // Apply centering to the molecule data BEFORE creating the models
     for (size_t i = 0; i < xyz.atomCoordArray.size(); i++) {
@@ -187,7 +188,7 @@ int main()
             glUniformMatrix4fv(glGetUniformLocation(outlineShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
             glUniformMatrix4fv(glGetUniformLocation(outlineShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
             glUniformMatrix4fv(glGetUniformLocation(outlineShader, "model"), 1, GL_FALSE, glm::value_ptr(finalTransform));
-            glUniform1f(glGetUniformLocation(outlineShader, "outlineSize"), 0.00f);
+            glUniform1f(glGetUniformLocation(outlineShader, "outlineSize"), OUTLINE_SIZE);
             
             glCullFace(GL_FRONT);
             glBindVertexArray(model.VAO);

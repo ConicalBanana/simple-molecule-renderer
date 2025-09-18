@@ -4,7 +4,7 @@ Simple molecule renderer implementing toon shading.
 
 ## Preview
 
-![Preview image](asset/preview.png "Preview image")
+![Preview image](asset/preview_with_outline.png "Preview image")
 
 ## Dependencies
 
