@@ -53,7 +53,7 @@ float zoom = 1.0f;
 
 // Model rotation variables (separate from camera)
 glm::mat4 modelRotation = glm::mat4(1.0f);
-glm::vec3 moleculeCenter = glm::vec3(0.0f);
+const glm::vec3 VIEW_CENTER = glm::vec3(0.0f);
 
 // Shadow settings
 const float SHADOW_THRESHOLD = 0.3f;                                 // Boundary of light and shadow
@@ -141,11 +141,12 @@ int main()
     unsigned int outlineShader = loadShader("./src/shaders/outline.vert", "./src/shaders/outline.frag");
 
     // Load multiple models
-    chem::Xyz xyz = chem::Xyz("./asset/y6_dimer.xyz");
+    chem::Xyz xyz = chem::Xyz("./asset/ps.xyz");
 
     // Get geometric center of molecule
     std::array<double, 3> geom_center = xyz.getGeomCenter();
-    moleculeCenter = glm::vec3(geom_center[0], geom_center[1], geom_center[2]);
+    std::cout << geom_center[0] << " " << geom_center[1] << " " << geom_center[2] << std::endl;
+    // moleculeCenter = glm::vec3(geom_center[0], geom_center[1], geom_center[2]);
 
     // Apply centering to the molecule data BEFORE creating the models
     for (size_t i = 0; i < xyz.atomCoordArray.size(); i++) {
@@ -157,12 +158,6 @@ int main()
     // Now load the models with the centered coordinates
     std::vector<model::Model> models = model::loadMoleculeModel(xyz);
 
-    // No need to translate models afterwards since coordinates are already centered
-    // The following lines should be removed or commented out:
-    // for (auto& model : models) {
-    //     model.transform = glm::translate(model.transform, -moleculeCenter);
-    // }
-    
     // Render loop
     while (!glfwWindowShouldClose(window)) {
         // 输入处理
@@ -185,9 +180,7 @@ int main()
         // Render all models
         for (const auto& model : models) {
             // Apply rotation around molecule center, then translate back to molecule center
-            glm::mat4 finalTransform = glm::translate(glm::mat4(1.0f), moleculeCenter) * 
-                                     modelRotation * 
-                                     model.transform;
+            glm::mat4 finalTransform = modelRotation * model.transform;
             
             // First pass: render outline
             glUseProgram(outlineShader);
