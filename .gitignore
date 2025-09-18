@@ -3,6 +3,8 @@ dat/*py
 caffeine.xyz
 old/
 
+**/molecule*png
+
 # MacOS
 .DS_Store
 

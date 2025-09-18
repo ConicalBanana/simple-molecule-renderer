@@ -6,6 +6,13 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <string>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #include "SimpleShapeGenerator.hpp"
 #include "Element.hpp"
@@ -20,6 +27,8 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadShader(const char* vertexPath, const char* fragmentPath);
+void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& models, 
+                     unsigned int toonShader, unsigned int outlineShader);
 /*
 Constants
 */
@@ -54,6 +63,9 @@ float zoom = 1.0f;
 // Model rotation variables (separate from camera)
 glm::mat4 modelRotation = glm::mat4(1.0f);
 const glm::vec3 VIEW_CENTER = glm::vec3(0.0f);
+
+// Export control variable
+bool exportRequested = false;
 
 // Shadow settings
 const float SHADOW_THRESHOLD = 0.3f;                                 // Boundary of light and shadow
@@ -138,6 +150,7 @@ int main()
     std::cout << "left mouse key: rotate view" << std::endl;
     std::cout << "scroll wheel: zoom view" << std::endl;
     std::cout << "R: reset camera position" << std::endl;
+    std::cout << "Ctrl+S: export PNG image (4x resolution)" << std::endl;
     
     // Load shaders
     unsigned int toonShader = loadShader("./src/shaders/toon.vert", "./src/shaders/toon.frag");
@@ -227,6 +240,12 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
         }
         
+        // Check if export is requested
+        if (exportRequested) {
+            exportHighResPNG(window, models, toonShader, outlineShader);
+            exportRequested = false;
+        }
+        
         // Swap buffers and poll IO events
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -241,17 +260,187 @@ int main()
     return 0;
 }
 
+// Export high-resolution PNG image
+void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& models, 
+                     unsigned int toonShader, unsigned int outlineShader)
+{
+    // Get current window size
+    int currentWidth, currentHeight;
+    glfwGetFramebufferSize(window, &currentWidth, &currentHeight);
+    
+    // Calculate high-resolution size (4x resolution)
+    int highResWidth = currentWidth * 4;
+    int highResHeight = currentHeight * 4;
+    
+    // Create framebuffer for high-resolution rendering
+    unsigned int framebuffer;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    
+    // Create color texture
+    unsigned int colorTexture;
+    glGenTextures(1, &colorTexture);
+    glBindTexture(GL_TEXTURE_2D, colorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, highResWidth, highResHeight, 0, 
+                 GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 
+                          GL_TEXTURE_2D, colorTexture, 0);
+    
+    // Create depth renderbuffer
+    unsigned int depthRenderbuffer;
+    glGenRenderbuffers(1, &depthRenderbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthRenderbuffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 
+                         highResWidth, highResHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, 
+                             GL_RENDERBUFFER, depthRenderbuffer);
+    
+    // Check framebuffer completeness
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cout << "ERROR: Framebuffer not complete!" << std::endl;
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &framebuffer);
+        glDeleteTextures(1, &colorTexture);
+        glDeleteRenderbuffers(1, &depthRenderbuffer);
+        return;
+    }
+    
+    // Set viewport for high-resolution rendering
+    glViewport(0, 0, highResWidth, highResHeight);
+    
+    // Clear framebuffer
+    glClearColor(BACKGROUND_COLOR[0], BACKGROUND_COLOR[1], BACKGROUND_COLOR[2], 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    // Create transformation matrices for high-resolution rendering
+    glm::mat4 view = glm::lookAt(CAMERA_POS, CAMERA_POS + CAMERA_FRONT, CAMERA_UP);
+    glm::mat4 projection = glm::ortho(
+        -(float)highResWidth * ORTHO_SCALING_FACTOR * 0.25f,  // Scale down by 4x to match original view
+        (float)highResWidth * ORTHO_SCALING_FACTOR * 0.25f,
+        -(float)highResHeight * ORTHO_SCALING_FACTOR * 0.25f,
+        (float)highResHeight * ORTHO_SCALING_FACTOR * 0.25f,
+        -100.0f, 100.0f
+    );
+    
+    // Render all models at high resolution
+    for (const auto& model : models) {
+        glm::mat4 finalTransform = modelRotation * model.transform;
+        
+        // First pass: render outline
+        glUseProgram(outlineShader);
+        glUniformMatrix4fv(glGetUniformLocation(outlineShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(outlineShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(glGetUniformLocation(outlineShader, "model"), 1, GL_FALSE, glm::value_ptr(finalTransform));
+        glUniform1f(glGetUniformLocation(outlineShader, "outlineSize"), OUTLINE_SIZE);
+        
+        glCullFace(GL_FRONT);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+        
+        // Second pass: render toon shading
+        glUseProgram(toonShader);
+        glUniformMatrix4fv(glGetUniformLocation(toonShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(toonShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(glGetUniformLocation(toonShader, "model"), 1, GL_FALSE, glm::value_ptr(finalTransform));
+        
+        // Set lighting and color parameters
+        glUniform3fv(glGetUniformLocation(toonShader, "shadowColor"), 1, glm::value_ptr(SHADOW_COLOR));
+        glUniform1f(glGetUniformLocation(toonShader, "highlightThreshold"), HIGHLIGHT_THRESHOLD);
+        glUniform1f(glGetUniformLocation(toonShader, "shadowThreshold"), SHADOW_THRESHOLD);
+        glUniform3fv(glGetUniformLocation(toonShader, "SHADOW_COLOR"), 1, glm::value_ptr(SHADOW_COLOR));
+        
+        // Set lighting parameters
+        if (USE_DIRECTIONAL_LIGHT) {
+            glm::vec4 lightDir4 = glm::vec4(DIRECTIONAL_LIGHT_DIR, 0.0f);
+            glUniform3fv(glGetUniformLocation(toonShader, "lightPos"), 1, glm::value_ptr(glm::vec3(lightDir4)));
+            glUniform1i(glGetUniformLocation(toonShader, "isDirectionalLight"), 1);
+        } else {
+            glUniform3fv(glGetUniformLocation(toonShader, "lightPos"), 1, glm::value_ptr(POINT_LIGHT_POS));
+            glUniform1i(glGetUniformLocation(toonShader, "isDirectionalLight"), 0);
+        }
+        
+        glUniform3fv(glGetUniformLocation(toonShader, "viewPos"), 1, glm::value_ptr(CAMERA_POS));
+        glUniform3f(glGetUniformLocation(toonShader, "lightColor"), 1.0f, 1.0f, 1.0f);
+        glUniform3fv(glGetUniformLocation(toonShader, "objectColor"), 1, glm::value_ptr(model.color));
+        
+        glCullFace(GL_BACK);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+    }
+    
+    // Read pixels from framebuffer
+    unsigned char* pixels = new unsigned char[highResWidth * highResHeight * 3];
+    glReadPixels(0, 0, highResWidth, highResHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    
+    // Flip image vertically (OpenGL renders upside down)
+    unsigned char* flippedPixels = new unsigned char[highResWidth * highResHeight * 3];
+    for (int y = 0; y < highResHeight; y++) {
+        for (int x = 0; x < highResWidth; x++) {
+            int srcIndex = (y * highResWidth + x) * 3;
+            int dstIndex = ((highResHeight - 1 - y) * highResWidth + x) * 3;
+            flippedPixels[dstIndex] = pixels[srcIndex];
+            flippedPixels[dstIndex + 1] = pixels[srcIndex + 1];
+            flippedPixels[dstIndex + 2] = pixels[srcIndex + 2];
+        }
+    }
+    
+    // Generate filename with timestamp
+    std::time_t now = std::time(0);
+    std::tm* timeinfo = std::localtime(&now);
+    std::stringstream ss;
+    ss << "molecule_export_" 
+       << std::setfill('0') << std::setw(4) << (timeinfo->tm_year + 1900)
+       << std::setfill('0') << std::setw(2) << (timeinfo->tm_mon + 1)
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_mday << "_"
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_hour
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_min
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_sec << ".png";
+    std::string filename = ss.str();
+    
+    // Save PNG image
+    if (stbi_write_png(filename.c_str(), highResWidth, highResHeight, 3, flippedPixels, highResWidth * 3)) {
+        std::cout << "High-resolution PNG exported successfully: " << filename 
+                  << " (" << highResWidth << "x" << highResHeight << ")" << std::endl;
+    } else {
+        std::cout << "Failed to export PNG image" << std::endl;
+    }
+    
+    // Clean up
+    delete[] pixels;
+    delete[] flippedPixels;
+    
+    // Restore original framebuffer and viewport
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, currentWidth, currentHeight);
+    
+    // Delete framebuffer objects
+    glDeleteFramebuffers(1, &framebuffer);
+    glDeleteTextures(1, &colorTexture);
+    glDeleteRenderbuffers(1, &depthRenderbuffer);
+}
+
 // Process input
 void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
     
+    // Export PNG with Ctrl+S
+    if ((glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS || 
+         glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS) &&
+        glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        exportRequested = true;
+    }
+    
     // Camera movement with WASD keys
     float cameraSpeed = 0.05f;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         CAMERA_POS += cameraSpeed * CAMERA_FRONT;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS && 
+        !(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS || 
+          glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS))
         CAMERA_POS -= cameraSpeed * CAMERA_FRONT;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
         CAMERA_POS -= glm::normalize(glm::cross(CAMERA_FRONT, CAMERA_UP)) * cameraSpeed;
