@@ -26,6 +26,10 @@
         "vector": "cpp",
         "cstddef": "cpp",
         "algorithm": "cpp",
-        "fstream": "cpp"
+        "fstream": "cpp",
+        "ios": "cpp",
+        "__locale": "cpp",
+        "optional": "cpp",
+        "__config": "cpp"
     }
 }
