@@ -14,6 +14,8 @@
 
 const float VDWR_SCALING_RATIO = 0.2f;
 const float BOND_RADIUS = 0.05f;
+const int ATOM_MODEL_RESOLUTION = 8;
+const int BOND_MODEL_RESOLUTION = 8;
 
 namespace model{
     // Add this structure to hold model data
@@ -59,10 +61,10 @@ model::Model model::loadAtomModel(
     const std::array<double, 3>& atom_coord
 ) {
     float sphere_radius = chem::VDWR_ARRAY[atom_number] * VDWR_SCALING_RATIO;
-    std::array<float, 3> sphere_color = chem::COLOR_ARRAY[atom_number];
+    std::array<float, 3> sphere_color = chem::COLOR_ARRAY[atom_number - 1];
 
     model::Model sphere;
-    std::vector<float> vertices = SphereGenerator::generateVertices(sphere_radius, 128, 64);
+    std::vector<float> vertices = SphereGenerator::generateVertices(sphere_radius, ATOM_MODEL_RESOLUTION*2, ATOM_MODEL_RESOLUTION);
     
     glGenVertexArrays(1, &sphere.VAO);
     glGenBuffers(1, &sphere.VBO);
@@ -99,9 +101,9 @@ model::Model model::loadBondModel(
     float bondLength = glm::length(bondVector);
     
     // Generate cylinder vertices with appropriate radius and the calculated length
-    float bondRadius = BOND_RADIUS;  // Typical bond radius (smaller than atom radius)
-    std::vector<float> vertices = CylinderGenerator::generateVerticesWithCaps(
-        bondRadius, bondLength, 16, 8  // Lower resolution for bonds
+    float bondRadius = BOND_RADIUS;
+    std::vector<float> vertices = CylinderGenerator::generateVertices(
+        bondRadius, bondLength, BOND_MODEL_RESOLUTION*2, BOND_MODEL_RESOLUTION
     );
     
     // Create OpenGL buffers
@@ -117,8 +119,7 @@ model::Model model::loadBondModel(
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     // Normal attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), 
-                        (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
     
     cylinder.vertexCount = vertices.size() / 6;
@@ -136,15 +137,22 @@ model::Model model::loadBondModel(
     transform = glm::translate(transform, midpoint);
     
     // Rotate to align with bond direction
-    if (glm::length(glm::cross(defaultDirection, bondDirection)) > 0.001f) {
+    // Check if we need to rotate at all
+    float dotProduct = glm::dot(defaultDirection, bondDirection);
+    if (abs(dotProduct) < 0.999f) {  // Not parallel or anti-parallel
         glm::vec3 rotationAxis = glm::normalize(glm::cross(defaultDirection, bondDirection));
-        float rotationAngle = acos(glm::clamp(glm::dot(defaultDirection, bondDirection), -1.0f, 1.0f));
+        float rotationAngle = acos(glm::clamp(dotProduct, -1.0f, 1.0f));
         transform = glm::rotate(transform, rotationAngle, rotationAxis);
-    } else if (glm::dot(defaultDirection, bondDirection) < 0) {
-        // Handle the case where vectors are opposite (180-degree rotation)
-        transform = glm::rotate(transform, glm::pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f));
+    } else if (dotProduct < 0) {
+        // Vectors are opposite (180-degree rotation needed)
+        // Choose an arbitrary perpendicular axis for 180-degree rotation
+        glm::vec3 perpAxis = glm::vec3(1.0f, 0.0f, 0.0f);
+        if (abs(glm::dot(defaultDirection, perpAxis)) > 0.9f) {
+            perpAxis = glm::vec3(0.0f, 1.0f, 0.0f);
+        }
+        transform = glm::rotate(transform, glm::pi<float>(), perpAxis);
     }
-    
+
     cylinder.transform = transform;
     cylinder.color = glm::vec3(0.7f, 0.7f, 0.7f);  // Gray color for bonds
     

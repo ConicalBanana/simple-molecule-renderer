@@ -141,17 +141,27 @@ int main()
     unsigned int outlineShader = loadShader("./src/shaders/outline.vert", "./src/shaders/outline.frag");
 
     // Load multiple models
-    chem::Xyz xyz = chem::Xyz("./benzene.xyz");
-    std::vector<model::Model> models = model::loadMoleculeModel(xyz);
-    
+    chem::Xyz xyz = chem::Xyz("./asset/y6_dimer.xyz");
+
     // Get geometric center of molecule
     std::array<double, 3> geom_center = xyz.getGeomCenter();
     moleculeCenter = glm::vec3(geom_center[0], geom_center[1], geom_center[2]);
-    
-    // Translate all models so that the geometric center is at origin
-    for (auto& model : models) {
-        model.transform = glm::translate(model.transform, -moleculeCenter);
+
+    // Apply centering to the molecule data BEFORE creating the models
+    for (size_t i = 0; i < xyz.atomCoordArray.size(); i++) {
+        xyz.atomCoordArray[i][0] -= geom_center[0];
+        xyz.atomCoordArray[i][1] -= geom_center[1];
+        xyz.atomCoordArray[i][2] -= geom_center[2];
     }
+
+    // Now load the models with the centered coordinates
+    std::vector<model::Model> models = model::loadMoleculeModel(xyz);
+
+    // No need to translate models afterwards since coordinates are already centered
+    // The following lines should be removed or commented out:
+    // for (auto& model : models) {
+    //     model.transform = glm::translate(model.transform, -moleculeCenter);
+    // }
     
     // Render loop
     while (!glfwWindowShouldClose(window)) {
@@ -169,7 +179,7 @@ int main()
             (float)SCR_WIDTH * ORTHO_SCALING_FACTOR,
             -(float)SCR_HEIGHT * ORTHO_SCALING_FACTOR,
             (float)SCR_HEIGHT * ORTHO_SCALING_FACTOR,
-            0.1f, 100.0f
+            -100.0f, 100.0f
         );
         
         // Render all models
