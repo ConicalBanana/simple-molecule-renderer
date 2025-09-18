@@ -38,3 +38,15 @@ cd ..
 ln -s build/ToonShading .
 ./ToonShading
 ```
+
+## Basic usages
+
+- W/A/S/D/Q/E for moving camera translationally
+- dragging with left mouse key for rotating your model.
+- ctrl+s for exporting image(4x current resolution, enough for publishing)
+
+You could simply replacing the `.xyz` file path in `main.cpp` with your own `xyz` file path.
+
+## Acknowledgements
+
+Thanks for the graphical library: [stb](https://github.com/nothings/stb).
