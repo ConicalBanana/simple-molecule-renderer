@@ -35,7 +35,6 @@ Constants
 // Screen size settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-float ORTHO_SCALING_FACTOR = 0.005f;  // Remove const to allow zoom
 
 // Color settings
 const GLfloat WHITE[3] = {1.0f, 1.0f, 1.0f};
@@ -46,26 +45,8 @@ const GLfloat GREEN[3] = {0.3f, 0.8f, 0.3f};
 const GLfloat* BACKGROUND_COLOR = WHITE;
 const GLfloat* OBJECT_COLOR = GREEN;
 
-// Camera settings - Remove const to allow interaction
-glm::vec3 CAMERA_POS = glm::vec3(0.0f, 0.0f, 3.0f);
-glm::vec3 CAMERA_FRONT = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 CAMERA_UP = glm::vec3(0.0f, 1.0f, 0.0f);
-
-// Mouse and camera control variables
-bool firstMouse = true;
-bool mousePressed = false;
-float lastX = SCR_WIDTH / 2.0f;
-float lastY = SCR_HEIGHT / 2.0f;
-float yaw = -90.0f;    // Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right
-float pitch = 0.0f;
-float zoom = 1.0f;
-
-// Model rotation variables (separate from camera)
-glm::mat4 modelRotation = glm::mat4(1.0f);
-const glm::vec3 VIEW_CENTER = glm::vec3(0.0f);
-
-// Export control variable
-bool exportRequested = false;
+// Camera settings
+// const glm::vec3 VIEW_CENTER = glm::vec3(0.0f);
 
 // Shadow settings
 const float SHADOW_THRESHOLD = 0.3f;                                 // Boundary of light and shadow
@@ -82,8 +63,51 @@ const glm::vec3 DIRECTIONAL_LIGHT_DIR = glm::vec3(-0.5f, -0.5f, -0.5f); // Direc
 // Outline settings
 const double OUTLINE_SIZE = 0.05;
 
-int main()
+// Export settins
+const float HIGHR_RES_FACTOR = 4.0f; // 2x resolution
+
+/*
+Global variables
+*/
+// Camera related
+float orthoScalingFactor = 0.005f;
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+// Export control variable
+bool exportRequested = false;
+
+// Mouse and camera control variables
+bool firstMouse = true;
+bool mousePressed = false;
+float lastX = SCR_WIDTH / 2.0f;
+float lastY = SCR_HEIGHT / 2.0f;
+float yaw = -90.0f;    // Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right
+float pitch = 0.0f;
+float zoom = 1.0f;
+
+// Model rotation variables (separate from camera)
+glm::mat4 modelRotation = glm::mat4(1.0f);
+
+
+int main(int argc, char* argv[])
 {
+    // Parse command line arguments
+    std::string filename = "./asset/C60-Ih.xyz";
+    if (argc > 1) {
+        std::string arg = argv[1];
+        filename = arg;
+
+        // -h or --help
+        if (arg == "-h" || arg == "--help") {
+            std::cout << "Usage:    " << argv[0] << " <filename>" << std::endl;
+            std::cout << "Example:  " << argv[0] << " ./asset/C60-Ih.xyz" << std::endl;
+            std::cout << "Shortcut: " << argv[0] << " -h or " << argv[0] << " --help" << std::endl;
+            return 0;
+        }
+    }
+
     // Initialize GLFW
     if (!glfwInit()) {
         std::cout << "Failed to initialize GLFW" << std::endl;
@@ -157,7 +181,7 @@ int main()
     unsigned int outlineShader = loadShader("./src/shaders/outline.vert", "./src/shaders/outline.frag");
 
     // Load multiple models
-    chem::Xyz xyz = chem::Xyz("./asset/ps.xyz");
+    chem::Xyz xyz = chem::Xyz(filename);
 
     // Get geometric center of molecule
     std::array<double, 3> geom_center = xyz.getGeomCenter();
@@ -182,12 +206,12 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         // Create transformation matrices
-        glm::mat4 view = glm::lookAt(CAMERA_POS, CAMERA_POS + CAMERA_FRONT, CAMERA_UP);
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         glm::mat4 projection = glm::ortho(
-            -(float)SCR_WIDTH * ORTHO_SCALING_FACTOR,
-            (float)SCR_WIDTH * ORTHO_SCALING_FACTOR,
-            -(float)SCR_HEIGHT * ORTHO_SCALING_FACTOR,
-            (float)SCR_HEIGHT * ORTHO_SCALING_FACTOR,
+            -(float)SCR_WIDTH * orthoScalingFactor,
+            (float)SCR_WIDTH * orthoScalingFactor,
+            -(float)SCR_HEIGHT * orthoScalingFactor,
+            (float)SCR_HEIGHT * orthoScalingFactor,
             -100.0f, 100.0f
         );
         
@@ -229,7 +253,7 @@ int main()
                 glUniform1i(glGetUniformLocation(toonShader, "isDirectionalLight"), 0);
             }
             
-            glUniform3fv(glGetUniformLocation(toonShader, "viewPos"), 1, glm::value_ptr(CAMERA_POS));
+            glUniform3fv(glGetUniformLocation(toonShader, "viewPos"), 1, glm::value_ptr(cameraPos));
             glUniform3f(glGetUniformLocation(toonShader, "lightColor"), 1.0f, 1.0f, 1.0f);
             
             // Set object color
@@ -242,8 +266,11 @@ int main()
         
         // Check if export is requested
         if (exportRequested) {
+            // Zoom in 4x
+            // orthoScalingFactor /= HIGHR_RES_FACTOR;
             exportHighResPNG(window, models, toonShader, outlineShader);
             exportRequested = false;
+            // orthoScalingFactor *= HIGHR_RES_FACTOR;
         }
         
         // Swap buffers and poll IO events
@@ -269,8 +296,8 @@ void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& model
     glfwGetFramebufferSize(window, &currentWidth, &currentHeight);
     
     // Calculate high-resolution size (4x resolution)
-    int highResWidth = currentWidth * 4;
-    int highResHeight = currentHeight * 4;
+    int highResWidth = currentWidth * HIGHR_RES_FACTOR;
+    int highResHeight = currentHeight * HIGHR_RES_FACTOR;
     
     // Create framebuffer for high-resolution rendering
     unsigned int framebuffer;
@@ -315,12 +342,12 @@ void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& model
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     // Create transformation matrices for high-resolution rendering
-    glm::mat4 view = glm::lookAt(CAMERA_POS, CAMERA_POS + CAMERA_FRONT, CAMERA_UP);
+    glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
     glm::mat4 projection = glm::ortho(
-        -(float)highResWidth * ORTHO_SCALING_FACTOR * 0.25f,  // Scale down by 4x to match original view
-        (float)highResWidth * ORTHO_SCALING_FACTOR * 0.25f,
-        -(float)highResHeight * ORTHO_SCALING_FACTOR * 0.25f,
-        (float)highResHeight * ORTHO_SCALING_FACTOR * 0.25f,
+        -(float)highResWidth * orthoScalingFactor / HIGHR_RES_FACTOR / 2,  // Scale down by 4x to match original view
+        (float)highResWidth * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
+        -(float)highResHeight * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
+        (float)highResHeight * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
         -100.0f, 100.0f
     );
     
@@ -361,7 +388,7 @@ void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& model
             glUniform1i(glGetUniformLocation(toonShader, "isDirectionalLight"), 0);
         }
         
-        glUniform3fv(glGetUniformLocation(toonShader, "viewPos"), 1, glm::value_ptr(CAMERA_POS));
+        glUniform3fv(glGetUniformLocation(toonShader, "viewPos"), 1, glm::value_ptr(cameraPos));
         glUniform3f(glGetUniformLocation(toonShader, "lightColor"), 1.0f, 1.0f, 1.0f);
         glUniform3fv(glGetUniformLocation(toonShader, "objectColor"), 1, glm::value_ptr(model.color));
         
@@ -437,29 +464,29 @@ void processInput(GLFWwindow* window)
     // Camera movement with WASD keys
     float cameraSpeed = 0.05f;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        CAMERA_POS += cameraSpeed * CAMERA_FRONT;
+        cameraPos += cameraSpeed * cameraFront;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS && 
         !(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS || 
           glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS))
-        CAMERA_POS -= cameraSpeed * CAMERA_FRONT;
+        cameraPos -= cameraSpeed * cameraFront;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        CAMERA_POS -= glm::normalize(glm::cross(CAMERA_FRONT, CAMERA_UP)) * cameraSpeed;
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        CAMERA_POS += glm::normalize(glm::cross(CAMERA_FRONT, CAMERA_UP)) * cameraSpeed;
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-        CAMERA_POS += cameraSpeed * CAMERA_UP;
+        cameraPos += cameraSpeed * cameraUp;
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-        CAMERA_POS -= cameraSpeed * CAMERA_UP;
+        cameraPos -= cameraSpeed * cameraUp;
     
     // Reset camera position with R key
     if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
-        CAMERA_POS = glm::vec3(0.0f, 0.0f, 3.0f);
-        CAMERA_FRONT = glm::vec3(0.0f, 0.0f, -1.0f);
-        CAMERA_UP = glm::vec3(0.0f, 1.0f, 0.0f);
+        cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+        cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+        cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
         yaw = -90.0f;
         pitch = 0.0f;
         zoom = 1.0f;
-        ORTHO_SCALING_FACTOR = 0.005f;
+        orthoScalingFactor = 0.005f;
         modelRotation = glm::mat4(1.0f);  // Reset model rotation
     }
 }
@@ -590,5 +617,5 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
         zoom = 10.0f;
         
     // Update orthographic scaling factor for zoom effect
-    ORTHO_SCALING_FACTOR = 0.005f / zoom;
+    orthoScalingFactor = 0.005f / zoom;
 }
