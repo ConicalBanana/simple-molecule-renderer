@@ -1,6 +1,7 @@
 build/
 dat/*py
 caffeine.xyz
+old/
 
 # VSCode
 .vscode/
