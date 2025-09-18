@@ -3,6 +3,9 @@ dat/*py
 caffeine.xyz
 old/
 
+# MacOS
+.DS_Store
+
 # VSCode
 .vscode/
 
