@@ -43,6 +43,7 @@ ln -s build/ToonShading .
 
 - W/A/S/D/Q/E for moving camera translationally
 - dragging with left mouse key for rotating your model.
+- dragging with right mouse key for rotating around z-direction (the direction of your camera)
 - ctrl+s for exporting image(4x current resolution, enough for publishing)
 
 You could simply replacing the `.xyz` file path in `main.cpp` with your own `xyz` file path.
@@ -50,3 +51,8 @@ You could simply replacing the `.xyz` file path in `main.cpp` with your own `xyz
 ## Acknowledgements
 
 Thanks for the graphical library: [stb](https://github.com/nothings/stb).
+
+- `zukxov02_P1_H.xyz` from [CSD MOF Collection](https://www.ccdc.cam.ac.uk/free-products/csd-mof-collection/)
+- `C60-Ih.xyz` from [The nanotube site](https://nanotube.msu.edu/fullerene/fullerene.php?C=60)
+- `benzene.xyz` from [Pressure-frozen benzene I revisited](https://doi.org/10.1107/S010876810503747X)
+- `ps.xyz` from [Materials Project](https://next-gen.materialsproject.org/materials/mp-612)

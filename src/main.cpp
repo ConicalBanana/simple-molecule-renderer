@@ -81,6 +81,7 @@ bool exportRequested = false;
 // Mouse and camera control variables
 bool firstMouse = true;
 bool mousePressed = false;
+bool rightMousePressed = false;
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 float yaw = -90.0f;    // Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right
@@ -141,6 +142,15 @@ int main(int argc, char* argv[])
                 firstMouse = true;
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             }
+        } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            if (action == GLFW_PRESS) {
+                rightMousePressed = true;
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            } else if (action == GLFW_RELEASE) {
+                rightMousePressed = false;
+                firstMouse = true;
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            }
         }
     });
     
@@ -172,6 +182,7 @@ int main(int argc, char* argv[])
     std::cout << "W/A/S/D: move camera" << std::endl;
     std::cout << "QE: move camera up/down" << std::endl;
     std::cout << "left mouse key: rotate view" << std::endl;
+    std::cout << "right mouse key: rotate around camera vector" << std::endl;
     std::cout << "scroll wheel: zoom view" << std::endl;
     std::cout << "R: reset camera position" << std::endl;
     std::cout << "Ctrl+S: export PNG image (4x resolution)" << std::endl;
@@ -581,7 +592,7 @@ unsigned int loadShader(const char* vertexPath, const char* fragmentPath)
 // Mouse movement callback for model rotation (not camera rotation)
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
-    if (!mousePressed)
+    if (!mousePressed && !rightMousePressed)
         return;
         
     if (firstMouse) {
@@ -599,12 +610,24 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     xoffset *= sensitivity;
     yoffset *= sensitivity;
 
-    // Create rotation matrices for model rotation around molecule center
-    glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), xoffset, glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 rotationX = glm::rotate(glm::mat4(1.0f), yoffset, glm::vec3(1.0f, 0.0f, 0.0f));
-    
-    // Apply rotations to the model rotation matrix
-    modelRotation = rotationY * rotationX * modelRotation;
+    if (mousePressed) {
+        // Left mouse: Standard model rotation around world axes
+        glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), xoffset, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 rotationX = glm::rotate(glm::mat4(1.0f), yoffset, glm::vec3(1.0f, 0.0f, 0.0f));
+        
+        // Apply rotations to the model rotation matrix
+        modelRotation = rotationY * rotationX * modelRotation;
+    } else if (rightMousePressed) {
+        // Right mouse: Rotation around camera vector (roll rotation)
+        // Use horizontal mouse movement for camera vector rotation
+        float rollAngle = xoffset;
+        
+        // Rotate around the camera's front vector (camera vector)
+        glm::mat4 rollRotation = glm::rotate(glm::mat4(1.0f), rollAngle, cameraFront);
+        
+        // Apply roll rotation to the model rotation matrix
+        modelRotation = rollRotation * modelRotation;
+    }
 }
 
 // Scroll callback for zooming
