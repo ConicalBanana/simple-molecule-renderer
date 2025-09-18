@@ -1,6 +1,6 @@
 # simple-molecule-renderer
 
-Simple molecule render implementing toon shading.
+Simple molecule renderer implementing toon shading.
 
 ## Preview
 
