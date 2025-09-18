@@ -41,6 +41,11 @@ ln -s build/ToonShading .
 
 ## Basic usages
 
+```Bash
+ToonShaing ./asset/ps.xyz
+# Or your own xyz file...
+```
+
 - W/A/S/D/Q/E for moving camera translationally
 - dragging with left mouse key for rotating your model.
 - dragging with right mouse key for rotating around z-direction (the direction of your camera)
