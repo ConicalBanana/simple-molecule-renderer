@@ -56,10 +56,8 @@ ToonShaing ./asset/ps.xyz ./asset/C60-Ih.xyz
 - dragging with right mouse key for rotating around z-direction (the direction of your camera)
 - ctrl+s for exporting image(4x current resolution, enough for publishing)
 
-You could simply replacing the `.xyz` file path in `main.cpp` with your own `xyz` file path.
-
 b) If you want to change colors or something else,
-then you should just alternate the constant values in `main.cpp`
+then you should just alternate the constant values in `src/Settings.hpp`
 
 ## Acknowledgements
 

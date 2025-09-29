@@ -18,6 +18,7 @@
 #include "Element.hpp"
 #include "Xyz.hpp"
 #include "Model.hpp"
+#include "Settings.hpp"
 
 /*
 Function declaration
@@ -48,52 +49,6 @@ void exportHighResPNG(
     unsigned int toonShader,
     unsigned int outlineShader
 );
-
-/*
-Constants
-*/
-// Screen size settings
-const float SCR_WIDTH = 800.;
-const float SCR_HEIGHT = 600.;
-
-// View settings
-const float CUE_CUTOFF_FRONT = -2.0f;
-// const float CUE_CUTOFF_FRONT = -100.0f;
-const float CUE_CUTOFF_BACK = 100.0f;
-
-// Color settings
-const GLfloat WHITE[3] = {1.0f, 1.0f, 1.0f};
-const GLfloat GRAY[3] = {0.9f, 0.9f, 0.9f};
-const GLfloat BLACK[3] = {0.0f, 0.0f, 0.0f};
-const GLfloat RED[3] = {0.8f, 0.3f, 0.3f};
-const GLfloat GREEN[3] = {0.3f, 0.8f, 0.3f};
-const GLfloat ORANGE[3] = {0.8f, 0.5f, 0.0f};
-const GLfloat* BACKGROUND_COLOR = WHITE;
-const GLfloat* OBJECT_COLOR = GREEN;
-const bool OVERWRITE_COLOR = true;
-const glm::vec3 COLOR_LAYER_1 = glm::vec3(RED[0], RED[1], RED[2]);
-const glm::vec3 COLOR_LAYER_2 = glm::vec3(GRAY[0], GRAY[1], GRAY[2]);
-const glm::vec3 COLOR_LAYER_3 = glm::vec3(GRAY[0], GRAY[1], GRAY[2]);
-const float ALPHA_LAYER_1 = 1.0f;
-const float ALPHA_LAYER_2 = 0.3f;
-const float ALPHA_LAYER_3 = 0.1f;
-const unsigned int MODEL_MODE_LAYER_1 = MODEL_MODEL_CPK;
-const unsigned int MODEL_MODE_LAYER_2 = MODEL_MODEL_LINE;
-const unsigned int MODEL_MODE_LAYER_3 = MODEL_MODEL_LINE;
-
-// Toon shader settings
-const float SHADOW_THRESHOLD = 0.3f;                                    // Boundary of light and shadow
-const glm::vec3 SHADOW_COLOR = glm::vec3(GRAY[0], GRAY[1], GRAY[2]);    // Color of shadow
-const float HIGHLIGHT_THRESHOLD = 1.0f;                                 // 1.0 for no highlight
-const bool USE_DIRECTIONAL_LIGHT = true;                                // false = point light, true = directional light
-const glm::vec3 POINT_LIGHT_POS = glm::vec3(1.2f, 1.0f, 2.0f);          // Point light position
-const glm::vec3 DIRECTIONAL_LIGHT_DIR = glm::vec3(-0.5f, -0.5f, -0.5f); // Directional light direction
-
-// Outline shader settings
-const double OUTLINE_SIZE = 0.05;
-
-// Export settings
-const float HIGHR_RES_FACTOR = 4.0f; // 2x resolution
 
 /*
 Global variables
