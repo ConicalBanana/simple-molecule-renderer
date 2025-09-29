@@ -6,10 +6,11 @@ layout(location = 1) in vec3 aNormal;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
-uniform float outlineSize;
+uniform float outlineSize;      // Outline size
 
 void main()
 {
-    vec3 pos = aPos + aNormal * outlineSize; // 沿法线方向膨胀模型
+    // Expand model along the normal direction
+    vec3 pos = aPos + aNormal * outlineSize;
     gl_Position = projection * view * model * vec4(pos, 1.0);
 }

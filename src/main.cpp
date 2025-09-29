@@ -14,7 +14,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#include "SimpleShapeGenerator.hpp"
+#include "ShapeGenerator.hpp"
 #include "Element.hpp"
 #include "Xyz.hpp"
 #include "Model.hpp"
@@ -29,12 +29,13 @@ void processInput(GLFWwindow* window);
 unsigned int loadShader(const char* vertexPath, const char* fragmentPath);
 void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& models, 
                      unsigned int toonShader, unsigned int outlineShader);
+
 /*
 Constants
 */
 // Screen size settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+const float SCR_WIDTH = 800.;
+const float SCR_HEIGHT = 600.;
 
 // Color settings
 const GLfloat WHITE[3] = {1.0f, 1.0f, 1.0f};
@@ -45,25 +46,19 @@ const GLfloat GREEN[3] = {0.3f, 0.8f, 0.3f};
 const GLfloat* BACKGROUND_COLOR = WHITE;
 const GLfloat* OBJECT_COLOR = GREEN;
 
-// Camera settings
-// const glm::vec3 VIEW_CENTER = glm::vec3(0.0f);
-
-// Shadow settings
-const float SHADOW_THRESHOLD = 0.3f;                                 // Boundary of light and shadow
-const glm::vec3 SHADOW_COLOR = glm::vec3(GRAY[0], GRAY[1], GRAY[2]); // Color of shadow
-
-// Highlight settings
-const float HIGHLIGHT_THRESHOLD = 1.0f; // 1.0 for no highlight
-
-// Light settings
-const bool USE_DIRECTIONAL_LIGHT = true;                               // false = point light, true = directional light
+// Toon shader settings
+const float SHADOW_THRESHOLD = 0.3f;                                    // Boundary of light and shadow
+const glm::vec3 SHADOW_COLOR = glm::vec3(GRAY[0], GRAY[1], GRAY[2]);    // Color of shadow
+const float HIGHLIGHT_THRESHOLD = 1.0f;                                 // 1.0 for no highlight
+const bool USE_DIRECTIONAL_LIGHT = true;                                // false = point light, true = directional light
 const glm::vec3 POINT_LIGHT_POS = glm::vec3(1.2f, 1.0f, 2.0f);          // Point light position
 const glm::vec3 DIRECTIONAL_LIGHT_DIR = glm::vec3(-0.5f, -0.5f, -0.5f); // Directional light direction
+const float ALPHA = 1.0f;
 
-// Outline settings
+// Outline shader settings
 const double OUTLINE_SIZE = 0.05;
 
-// Export settins
+// Export settings
 const float HIGHR_RES_FACTOR = 4.0f; // 2x resolution
 
 /*
@@ -91,6 +86,71 @@ float zoom = 1.0f;
 // Model rotation variables (separate from camera)
 glm::mat4 modelRotation = glm::mat4(1.0f);
 
+void setupRenderSettings(
+    unsigned int shader,
+    const glm::mat4& view,
+    const glm::mat4& projection,
+    const glm::mat4& model,
+    const glm::vec3& modelColor
+) {
+    glUseProgram(shader);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(shader, "model"), 1, GL_FALSE, glm::value_ptr(model));
+
+    // Set lighting and color parameters for toon shader
+    glUniform3fv(glGetUniformLocation(shader, "shadowColor"), 1, glm::value_ptr(SHADOW_COLOR));
+    glUniform1f(glGetUniformLocation(shader, "highlightThreshold"), HIGHLIGHT_THRESHOLD);
+    glUniform1f(glGetUniformLocation(shader, "shadowThreshold"), SHADOW_THRESHOLD);
+
+    // Set lighting parameters
+    if (USE_DIRECTIONAL_LIGHT) {
+        glm::vec4 lightDir4 = glm::vec4(DIRECTIONAL_LIGHT_DIR, 0.0f);
+        glUniform3fv(glGetUniformLocation(shader, "lightPos"), 1, glm::value_ptr(glm::vec3(lightDir4)));
+        glUniform1i(glGetUniformLocation(shader, "isDirectionalLight"), 1);
+    } else {
+        glUniform3fv(glGetUniformLocation(shader, "lightPos"), 1, glm::value_ptr(POINT_LIGHT_POS));
+        glUniform1i(glGetUniformLocation(shader, "isDirectionalLight"), 0);
+    }
+
+    glUniform3fv(glGetUniformLocation(shader, "viewPos"), 1, glm::value_ptr(cameraPos));
+    glUniform3f(glGetUniformLocation(shader, "lightColor"), 1.0f, 1.0f, 1.0f);
+    glUniform3fv(glGetUniformLocation(shader, "objectColor"), 1, glm::value_ptr(modelColor));
+    glUniform1f(glGetUniformLocation(shader, "alpha"), ALPHA);
+}
+
+void setupOutlineSettings(
+    unsigned int shader,
+    const glm::mat4& view, 
+    const glm::mat4& projection,
+    const glm::mat4& model
+) {
+    glUseProgram(shader);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(shader, "model"), 1, GL_FALSE, glm::value_ptr(model));
+    glUniform1f(glGetUniformLocation(shader, "outlineSize"), OUTLINE_SIZE);
+    glUniform1f(glGetUniformLocation(shader, "alpha"), ALPHA);
+}
+
+void printDescription() {
+    // Descriptions
+    std::cout << "Shortcut description:" << std::endl;
+    std::cout << "ESC: Exit" << std::endl;
+    std::cout << "W/A/S/D: move camera" << std::endl;
+    std::cout << "QE: move camera up/down" << std::endl;
+    std::cout << "left mouse key: rotate view" << std::endl;
+    std::cout << "right mouse key: rotate around camera vector" << std::endl;
+    std::cout << "scroll wheel: zoom view" << std::endl;
+    std::cout << "R: reset camera position" << std::endl;
+    std::cout << "Ctrl+S: export PNG image (4x resolution)" << std::endl;
+}
+
+void setupBackground(void) {
+    glClearColor(BACKGROUND_COLOR[0], BACKGROUND_COLOR[1], BACKGROUND_COLOR[2], 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -117,9 +177,7 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    // Enable anti-aliasing with 4x MSAA
-    glfwWindowHint(GLFW_SAMPLES, 16);
+    glfwWindowHint(GLFW_SAMPLES, 16);  // 4x MSAA
 
     // Create window
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Toon Shading Example", NULL, NULL);
@@ -163,125 +221,60 @@ int main(int argc, char* argv[])
     // Configure global OpenGL state
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
-    
-    // Enable multisampling for anti-aliasing
     glEnable(GL_MULTISAMPLE);
-    
-    // Check if MSAA is supported and report the sample count
-    GLint samples;
-    glGetIntegerv(GL_SAMPLES, &samples);
-    if (samples > 0) {
-        std::cout << "Anti-aliasing enabled with " << samples << "x MSAA" << std::endl;
-    } else {
-        std::cout << "Warning: Anti-aliasing not supported on this system" << std::endl;
-    }
-    
-    // Descriptions
-    std::cout << "Shortcut description:" << std::endl;
-    std::cout << "ESC: Exit" << std::endl;
-    std::cout << "W/A/S/D: move camera" << std::endl;
-    std::cout << "QE: move camera up/down" << std::endl;
-    std::cout << "left mouse key: rotate view" << std::endl;
-    std::cout << "right mouse key: rotate around camera vector" << std::endl;
-    std::cout << "scroll wheel: zoom view" << std::endl;
-    std::cout << "R: reset camera position" << std::endl;
-    std::cout << "Ctrl+S: export PNG image (4x resolution)" << std::endl;
-    
+
+    // Enable alpha blending for transparency
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    printDescription();
+
+    // Load multiple models
+    chem::Xyz xyz = chem::Xyz(filename);
+    xyz.autoCentering();
+    std::vector<model::Model> models = model::loadMoleculeModel(xyz);
+
     // Load shaders
     unsigned int toonShader = loadShader("./src/shaders/toon.vert", "./src/shaders/toon.frag");
     unsigned int outlineShader = loadShader("./src/shaders/outline.vert", "./src/shaders/outline.frag");
 
-    // Load multiple models
-    chem::Xyz xyz = chem::Xyz(filename);
-
-    // Get geometric center of molecule
-    std::array<double, 3> geom_center = xyz.getGeomCenter();
-
-    // Apply centering to the molecule data BEFORE creating the models
-    for (size_t i = 0; i < xyz.atomCoordArray.size(); i++) {
-        xyz.atomCoordArray[i][0] -= geom_center[0];
-        xyz.atomCoordArray[i][1] -= geom_center[1];
-        xyz.atomCoordArray[i][2] -= geom_center[2];
-    }
-
-    // Now load the models with the centered coordinates
-    std::vector<model::Model> models = model::loadMoleculeModel(xyz);
-
     // Render loop
     while (!glfwWindowShouldClose(window)) {
-        // 输入处理
         processInput(window);
-        
-        // 渲染
-        glClearColor(BACKGROUND_COLOR[0], BACKGROUND_COLOR[1], BACKGROUND_COLOR[2], 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
+        setupBackground();
+
         // Create transformation matrices
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         glm::mat4 projection = glm::ortho(
-            -(float)SCR_WIDTH * orthoScalingFactor,
-            (float)SCR_WIDTH * orthoScalingFactor,
-            -(float)SCR_HEIGHT * orthoScalingFactor,
-            (float)SCR_HEIGHT * orthoScalingFactor,
+            -SCR_WIDTH * orthoScalingFactor,
+            SCR_WIDTH * orthoScalingFactor,
+            -SCR_HEIGHT * orthoScalingFactor,
+            SCR_HEIGHT * orthoScalingFactor,
             -100.0f, 100.0f
         );
         
         // Render all models
-        for (const auto& model : models) {
+        for (const struct model::Model& model : models) {
             // Apply rotation around molecule center, then translate back to molecule center
             glm::mat4 finalTransform = modelRotation * model.transform;
             
             // First pass: render outline
-            glUseProgram(outlineShader);
-            glUniformMatrix4fv(glGetUniformLocation(outlineShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
-            glUniformMatrix4fv(glGetUniformLocation(outlineShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-            glUniformMatrix4fv(glGetUniformLocation(outlineShader, "model"), 1, GL_FALSE, glm::value_ptr(finalTransform));
-            glUniform1f(glGetUniformLocation(outlineShader, "outlineSize"), OUTLINE_SIZE);
-            
+            setupOutlineSettings(outlineShader, view, projection, finalTransform);
             glCullFace(GL_FRONT);
             glBindVertexArray(model.VAO);
             glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
-            
+
             // Second pass: render toon shading
-            glUseProgram(toonShader);
-            glUniformMatrix4fv(glGetUniformLocation(toonShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
-            glUniformMatrix4fv(glGetUniformLocation(toonShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-            glUniformMatrix4fv(glGetUniformLocation(toonShader, "model"), 1, GL_FALSE, glm::value_ptr(finalTransform));
-            
-            // Set lighting and color parameters
-            glUniform3fv(glGetUniformLocation(toonShader, "shadowColor"), 1, glm::value_ptr(SHADOW_COLOR));
-            glUniform1f(glGetUniformLocation(toonShader, "highlightThreshold"), HIGHLIGHT_THRESHOLD);
-            glUniform1f(glGetUniformLocation(toonShader, "shadowThreshold"), SHADOW_THRESHOLD);
-            glUniform3fv(glGetUniformLocation(toonShader, "SHADOW_COLOR"), 1, glm::value_ptr(SHADOW_COLOR));
-            
-            // Set lighting parameters (light remains fixed in world space)
-            if (USE_DIRECTIONAL_LIGHT) {
-                glm::vec4 lightDir4 = glm::vec4(DIRECTIONAL_LIGHT_DIR, 0.0f);
-                glUniform3fv(glGetUniformLocation(toonShader, "lightPos"), 1, glm::value_ptr(glm::vec3(lightDir4)));
-                glUniform1i(glGetUniformLocation(toonShader, "isDirectionalLight"), 1);
-            } else {
-                glUniform3fv(glGetUniformLocation(toonShader, "lightPos"), 1, glm::value_ptr(POINT_LIGHT_POS));
-                glUniform1i(glGetUniformLocation(toonShader, "isDirectionalLight"), 0);
-            }
-            
-            glUniform3fv(glGetUniformLocation(toonShader, "viewPos"), 1, glm::value_ptr(cameraPos));
-            glUniform3f(glGetUniformLocation(toonShader, "lightColor"), 1.0f, 1.0f, 1.0f);
-            
-            // Set object color
-            glUniform3fv(glGetUniformLocation(toonShader, "objectColor"), 1, glm::value_ptr(model.color));
-            
+            setupRenderSettings(toonShader, view, projection, finalTransform, model.color);
             glCullFace(GL_BACK);
             glBindVertexArray(model.VAO);
             glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
         }
-        
+
         // Check if export is requested
         if (exportRequested) {
-            // Zoom in 4x
-            // orthoScalingFactor /= HIGHR_RES_FACTOR;
             exportHighResPNG(window, models, toonShader, outlineShader);
             exportRequested = false;
-            // orthoScalingFactor *= HIGHR_RES_FACTOR;
         }
         
         // Swap buffers and poll IO events
@@ -367,41 +360,14 @@ void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& model
         glm::mat4 finalTransform = modelRotation * model.transform;
         
         // First pass: render outline
-        glUseProgram(outlineShader);
-        glUniformMatrix4fv(glGetUniformLocation(outlineShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(outlineShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-        glUniformMatrix4fv(glGetUniformLocation(outlineShader, "model"), 1, GL_FALSE, glm::value_ptr(finalTransform));
-        glUniform1f(glGetUniformLocation(outlineShader, "outlineSize"), OUTLINE_SIZE);
+        setupOutlineSettings(outlineShader, view, projection, finalTransform);
         
         glCullFace(GL_FRONT);
         glBindVertexArray(model.VAO);
         glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
         
         // Second pass: render toon shading
-        glUseProgram(toonShader);
-        glUniformMatrix4fv(glGetUniformLocation(toonShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(toonShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-        glUniformMatrix4fv(glGetUniformLocation(toonShader, "model"), 1, GL_FALSE, glm::value_ptr(finalTransform));
-        
-        // Set lighting and color parameters
-        glUniform3fv(glGetUniformLocation(toonShader, "shadowColor"), 1, glm::value_ptr(SHADOW_COLOR));
-        glUniform1f(glGetUniformLocation(toonShader, "highlightThreshold"), HIGHLIGHT_THRESHOLD);
-        glUniform1f(glGetUniformLocation(toonShader, "shadowThreshold"), SHADOW_THRESHOLD);
-        glUniform3fv(glGetUniformLocation(toonShader, "SHADOW_COLOR"), 1, glm::value_ptr(SHADOW_COLOR));
-        
-        // Set lighting parameters
-        if (USE_DIRECTIONAL_LIGHT) {
-            glm::vec4 lightDir4 = glm::vec4(DIRECTIONAL_LIGHT_DIR, 0.0f);
-            glUniform3fv(glGetUniformLocation(toonShader, "lightPos"), 1, glm::value_ptr(glm::vec3(lightDir4)));
-            glUniform1i(glGetUniformLocation(toonShader, "isDirectionalLight"), 1);
-        } else {
-            glUniform3fv(glGetUniformLocation(toonShader, "lightPos"), 1, glm::value_ptr(POINT_LIGHT_POS));
-            glUniform1i(glGetUniformLocation(toonShader, "isDirectionalLight"), 0);
-        }
-        
-        glUniform3fv(glGetUniformLocation(toonShader, "viewPos"), 1, glm::value_ptr(cameraPos));
-        glUniform3f(glGetUniformLocation(toonShader, "lightColor"), 1.0f, 1.0f, 1.0f);
-        glUniform3fv(glGetUniformLocation(toonShader, "objectColor"), 1, glm::value_ptr(model.color));
+        setupRenderSettings(toonShader, view, projection, finalTransform, model.color);
         
         glCullFace(GL_BACK);
         glBindVertexArray(model.VAO);

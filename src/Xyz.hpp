@@ -13,6 +13,7 @@ namespace chem{
     class Xyz : public MoleculeFile{
         public:
             Xyz(const std::string& filename);
+            void autoCentering(void);
         private:
             void loadFile(const std::string& filename);
     };
@@ -51,4 +52,13 @@ void chem::Xyz::loadFile(const std::string& filename){
         this->atomCoordArray[i] = atom_coords;
     }
     if (file.is_open()){file.close();}
+}
+
+void chem::Xyz::autoCentering(void) {
+    std::array<double, 3> geom_center = this->getGeomCenter();
+    for (int i = 0; i < this->atomCoordArray.size(); i++) {
+        this->atomCoordArray[i][0] -= geom_center[0];
+        this->atomCoordArray[i][1] -= geom_center[1];
+        this->atomCoordArray[i][2] -= geom_center[2];
+    }
 }

@@ -14,4 +14,6 @@ add_executable(ToonShading src/main.cpp)
 
 target_link_libraries(ToonShading ${OPENGL_LIBRARIES})
 target_link_libraries(ToonShading glfw)
+# target_link_libraries(ToonShading /opt/homebrew/opt/glfw/lib/libglfw3.a)
 target_link_libraries(ToonShading GLEW::GLEW)
+# target_link_libraries(ToonShading /opt/homebrew/opt/glew/lib/libGLEW.a)

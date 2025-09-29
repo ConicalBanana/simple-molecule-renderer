@@ -7,7 +7,7 @@
 #include <vector>
 #include <cmath>
 
-#include "SimpleShapeGenerator.hpp"
+#include "ShapeGenerator.hpp"
 #include "Molecule.hpp"
 #include "Element.hpp"
 
@@ -20,15 +20,20 @@ const int BOND_MODEL_RESOLUTION = 8;
 namespace model{
     // Add this structure to hold model data
     struct Model {
+        // Vertex Array Object
         unsigned int VAO;
+        // Vertex Buffer Object.
         unsigned int VBO;
+        // Vertex count
         int vertexCount;
+        // Transformation matrix
         glm::mat4 transform;
         glm::vec3 color;
-        
+        // float alpha;
+
         Model() : VAO(0), VBO(0), vertexCount(0), 
                 transform(glm::mat4(1.0f)), 
-                color(glm::vec3(0.3f, 0.8f, 0.3f)) {}
+                color(glm::vec3(0.3f, 0.8f, 0.3f)){}
     };
 
     void renderModel(const Model& model, unsigned int shader, const glm::mat4& view, const glm::mat4& );
@@ -38,6 +43,14 @@ namespace model{
     std::vector<model::Model> loadMoleculeModel(chem::MoleculeFile& moleculeFile);
 }
 
+
+/*
+Render a model.
+@param model: Model to render.
+@param shader: Shader to use.
+@param view: View matrix.
+@param projection: Projection matrix.
+*/
 void model::renderModel(
     const Model& model,
     unsigned int shader, 
@@ -56,6 +69,11 @@ void model::renderModel(
     glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
 }
 
+/*
+Load an atom model.
+@param atom_number: Atom number.
+@param atom_coord: Atom coordinate.
+*/
 model::Model model::loadAtomModel(
     const unsigned int& atom_number,
     const std::array<double, 3>& atom_coord
@@ -89,6 +107,10 @@ model::Model model::loadAtomModel(
     return sphere;
 }
 
+/*
+Load a bond model.
+@param bond_vec: Bond vector.
+*/
 model::Model model::loadBondModel(
     const std::array<double, 6>& bond_vec
 ) {
@@ -159,6 +181,11 @@ model::Model model::loadBondModel(
     return cylinder;
 }
 
+
+/*
+Load a molecule model.
+@param moleculeFile: Molecule file.
+*/
 std::vector<model::Model> model::loadMoleculeModel(chem::MoleculeFile& moleculeFile){
     std::vector<model::Model> models;
 
@@ -183,6 +210,10 @@ std::vector<model::Model> model::loadMoleculeModel(chem::MoleculeFile& moleculeF
 }
 
 
+/*
+Cleanup models.
+@param models: Models to cleanup.
+*/
 void model::cleanupModels(std::vector<Model>& models) {
     for (auto& model : models) {
         glDeleteVertexArrays(1, &model.VAO);
