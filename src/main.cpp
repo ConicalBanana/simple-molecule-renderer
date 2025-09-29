@@ -77,6 +77,9 @@ const glm::vec3 COLOR_LAYER_3 = glm::vec3(GRAY[0], GRAY[1], GRAY[2]);
 const float ALPHA_LAYER_1 = 1.0f;
 const float ALPHA_LAYER_2 = 0.3f;
 const float ALPHA_LAYER_3 = 0.1f;
+const unsigned int MODEL_MODE_LAYER_1 = MODEL_MODEL_CPK;
+const unsigned int MODEL_MODE_LAYER_2 = MODEL_MODEL_LINE;
+const unsigned int MODEL_MODE_LAYER_3 = MODEL_MODEL_LINE;
 
 // Toon shader settings
 const float SHADOW_THRESHOLD = 0.3f;                                    // Boundary of light and shadow
@@ -438,10 +441,16 @@ int main(int argc, char* argv[])
     // Load multiple models
     // chem::Xyz xyz = chem::Xyz(filename);
     std::vector<std::vector<model::Model>> modelsVec;
-    for (const std::string& filename : filenameVec) {
-        chem::Xyz xyz = chem::Xyz(filename);
+    for (int i = 0; i < filenameVec.size(); i++) {
+        chem::Xyz xyz = chem::Xyz(filenameVec[i]);
         xyz.autoCentering();
-        modelsVec.push_back(model::loadMoleculeModel(xyz, MODEL_MODEL_CPK));
+        if (i == 0) {
+            modelsVec.push_back(model::loadMoleculeModel(xyz, MODEL_MODE_LAYER_1));
+        } else if (i == 1) {
+            modelsVec.push_back(model::loadMoleculeModel(xyz, MODEL_MODE_LAYER_2));
+        } else if (i == 2) {
+            modelsVec.push_back(model::loadMoleculeModel(xyz, MODEL_MODE_LAYER_3));
+        }
     }
 
     // Load shaders
