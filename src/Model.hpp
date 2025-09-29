@@ -14,8 +14,13 @@
 
 const float VDWR_SCALING_RATIO = 0.2f;
 const float BOND_RADIUS = 0.05f;
-const int ATOM_MODEL_RESOLUTION = 16;
-const int BOND_MODEL_RESOLUTION = 8;
+const int ATOM_MODEL_RESOLUTION = 8;
+const int BOND_MODEL_RESOLUTION = 3;
+
+
+extern const unsigned int MODEL_MODEL_CPK = 0;
+extern const unsigned int MODEL_MODEL_LINE = 1;
+
 
 namespace model{
     // Add this structure to hold model data
@@ -41,6 +46,7 @@ namespace model{
     Model loadAtomModel(const unsigned int& atom_number, const std::array<double, 3>& atom_coord);
     Model loadBondModel(const std::array<double, 6>& bond_vec);
     std::vector<model::Model> loadMoleculeModel(chem::MoleculeFile& moleculeFile);
+    std::vector<model::Model> loadMoleculeModel(chem::MoleculeFile& moleculeFile, const int& mode);
 }
 
 
@@ -209,6 +215,44 @@ std::vector<model::Model> model::loadMoleculeModel(chem::MoleculeFile& moleculeF
     return models;
 }
 
+/*
+Load a molecule model.
+@param moleculeFile: Molecule file.
+*/
+std::vector<model::Model> model::loadMoleculeModel(
+    chem::MoleculeFile& moleculeFile,
+    const int& mode
+){
+    std::vector<model::Model> models;
+
+    // Atom
+    if (mode == MODEL_MODEL_CPK){
+        const size_t atom_count = moleculeFile.size();
+        for (size_t i = 0; i < atom_count; i++){
+            models.push_back(
+                model::loadAtomModel(
+                    moleculeFile.atomNumberArray[i],
+                    moleculeFile.atomCoordArray[i]
+                )
+            );
+        }
+    }
+
+    // Bond
+    if (
+        (mode == MODEL_MODEL_LINE)
+        || (mode == MODEL_MODEL_CPK)
+    ){
+        const std::vector<std::array<double, 6>> bond_vector_array =
+            moleculeFile.getBondVectorArray();
+        for (size_t i = 0; i < bond_vector_array.size(); i++){
+            models.push_back(model::loadBondModel(bond_vector_array[i]));
+        }
+    }
+
+    glBindVertexArray(0);
+    return models;
+}
 
 /*
 Cleanup models.

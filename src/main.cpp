@@ -27,8 +27,27 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadShader(const char* vertexPath, const char* fragmentPath);
-void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& models, 
-                     unsigned int toonShader, unsigned int outlineShader);
+void exportHighResPNG(
+    GLFWwindow* window,
+    const std::vector<model::Model>& models, 
+    unsigned int toonShader,
+    unsigned int outlineShader
+);
+void exportHighResPNG(
+    GLFWwindow* window,
+    const std::vector<model::Model>& models_layer1, 
+    const std::vector<model::Model>& models_layer2,
+    unsigned int toonShader,
+    unsigned int outlineShader
+);
+void exportHighResPNG(
+    GLFWwindow* window,
+    const std::vector<model::Model>& models_layer1, 
+    const std::vector<model::Model>& models_layer2,
+    const std::vector<model::Model>& models_layer3,
+    unsigned int toonShader,
+    unsigned int outlineShader
+);
 
 /*
 Constants
@@ -37,14 +56,27 @@ Constants
 const float SCR_WIDTH = 800.;
 const float SCR_HEIGHT = 600.;
 
+// View settings
+const float CUE_CUTOFF_FRONT = -2.0f;
+// const float CUE_CUTOFF_FRONT = -100.0f;
+const float CUE_CUTOFF_BACK = 100.0f;
+
 // Color settings
 const GLfloat WHITE[3] = {1.0f, 1.0f, 1.0f};
 const GLfloat GRAY[3] = {0.9f, 0.9f, 0.9f};
 const GLfloat BLACK[3] = {0.0f, 0.0f, 0.0f};
 const GLfloat RED[3] = {0.8f, 0.3f, 0.3f};
 const GLfloat GREEN[3] = {0.3f, 0.8f, 0.3f};
+const GLfloat ORANGE[3] = {0.8f, 0.5f, 0.0f};
 const GLfloat* BACKGROUND_COLOR = WHITE;
 const GLfloat* OBJECT_COLOR = GREEN;
+const bool OVERWRITE_COLOR = true;
+const glm::vec3 COLOR_LAYER_1 = glm::vec3(RED[0], RED[1], RED[2]);
+const glm::vec3 COLOR_LAYER_2 = glm::vec3(GRAY[0], GRAY[1], GRAY[2]);
+const glm::vec3 COLOR_LAYER_3 = glm::vec3(GRAY[0], GRAY[1], GRAY[2]);
+const float ALPHA_LAYER_1 = 1.0f;
+const float ALPHA_LAYER_2 = 0.3f;
+const float ALPHA_LAYER_3 = 0.1f;
 
 // Toon shader settings
 const float SHADOW_THRESHOLD = 0.3f;                                    // Boundary of light and shadow
@@ -53,7 +85,6 @@ const float HIGHLIGHT_THRESHOLD = 1.0f;                                 // 1.0 f
 const bool USE_DIRECTIONAL_LIGHT = true;                                // false = point light, true = directional light
 const glm::vec3 POINT_LIGHT_POS = glm::vec3(1.2f, 1.0f, 2.0f);          // Point light position
 const glm::vec3 DIRECTIONAL_LIGHT_DIR = glm::vec3(-0.5f, -0.5f, -0.5f); // Directional light direction
-const float ALPHA = 1.0f;
 
 // Outline shader settings
 const double OUTLINE_SIZE = 0.05;
@@ -91,7 +122,8 @@ void setupRenderSettings(
     const glm::mat4& view,
     const glm::mat4& projection,
     const glm::mat4& model,
-    const glm::vec3& modelColor
+    const glm::vec3& modelColor,
+    const float& alpha
 ) {
     glUseProgram(shader);
     glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, glm::value_ptr(view));
@@ -116,22 +148,24 @@ void setupRenderSettings(
     glUniform3fv(glGetUniformLocation(shader, "viewPos"), 1, glm::value_ptr(cameraPos));
     glUniform3f(glGetUniformLocation(shader, "lightColor"), 1.0f, 1.0f, 1.0f);
     glUniform3fv(glGetUniformLocation(shader, "objectColor"), 1, glm::value_ptr(modelColor));
-    glUniform1f(glGetUniformLocation(shader, "alpha"), ALPHA);
+    glUniform1f(glGetUniformLocation(shader, "alpha"), alpha);
 }
 
 void setupOutlineSettings(
     unsigned int shader,
     const glm::mat4& view, 
     const glm::mat4& projection,
-    const glm::mat4& model
+    const glm::mat4& model,
+    const float& alpha
 ) {
     glUseProgram(shader);
     glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
     glUniformMatrix4fv(glGetUniformLocation(shader, "model"), 1, GL_FALSE, glm::value_ptr(model));
     glUniform1f(glGetUniformLocation(shader, "outlineSize"), OUTLINE_SIZE);
-    glUniform1f(glGetUniformLocation(shader, "alpha"), ALPHA);
+    glUniform1f(glGetUniformLocation(shader, "alpha"), alpha);
 }
+
 
 void printDescription() {
     // Descriptions
@@ -151,14 +185,186 @@ void setupBackground(void) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
+/*
+Model render auxiliary function for single layers.
+*/
+void modelRenderAux(
+    const std::vector<model::Model>& models,
+    unsigned int toonShader,
+    unsigned int outlineShader,
+    const glm::mat4& view,
+    const glm::mat4& projection
+) {
+    const glm::vec3 color_cpk = glm::vec3(0.8f, 0.0f, 0.0f);
+    // Render all models
+    for (const struct model::Model& model : models) {
+        // Apply rotation around molecule center, then translate back to molecule center
+        glm::mat4 finalTransform = modelRotation * model.transform;
+        
+        // First pass: render outline
+        setupOutlineSettings(outlineShader, view, projection, finalTransform, ALPHA_LAYER_1);
+        glCullFace(GL_FRONT);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+
+        // Second pass: render toon shading
+        if (OVERWRITE_COLOR){
+            setupRenderSettings(toonShader, view, projection, finalTransform, COLOR_LAYER_1, ALPHA_LAYER_1);
+        } else {
+            setupRenderSettings(toonShader, view, projection, finalTransform, model.color, ALPHA_LAYER_1);
+        }
+        glCullFace(GL_BACK);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+    }
+}
+
+/*
+Model render auxiliary function for dual layers.
+*/
+void modelRenderAux(
+    const std::vector<model::Model>& models_layer1,
+    const std::vector<model::Model>& models_layer2,
+    unsigned int toonShader,
+    unsigned int outlineShader,
+    const glm::mat4& view,
+    const glm::mat4& projection
+) {
+    for (const struct model::Model& model : models_layer1) {
+        // Apply rotation around molecule center, then translate back to molecule center
+        glm::mat4 finalTransform = modelRotation * model.transform;
+        
+        // First pass: render outline
+        setupOutlineSettings(outlineShader, view, projection, finalTransform, ALPHA_LAYER_1);
+        glCullFace(GL_FRONT);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+
+        // Second pass: render toon shading
+        if (OVERWRITE_COLOR){
+            setupRenderSettings(toonShader, view, projection, finalTransform, COLOR_LAYER_1, ALPHA_LAYER_1);
+        } else {
+            setupRenderSettings(toonShader, view, projection, finalTransform, model.color, ALPHA_LAYER_1);
+        }
+        glCullFace(GL_BACK);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+    }
+
+    for (const struct model::Model& model : models_layer2) {
+        // Apply rotation around molecule center, then translate back to molecule center
+        glm::mat4 finalTransform = modelRotation * model.transform;
+        
+        // First pass: render outline
+        setupOutlineSettings(outlineShader, view, projection, finalTransform, ALPHA_LAYER_2);
+        glCullFace(GL_FRONT);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+
+        // Second pass: render toon shading
+        if (OVERWRITE_COLOR){
+            setupRenderSettings(toonShader, view, projection, finalTransform, COLOR_LAYER_2, ALPHA_LAYER_2);
+        } else {
+            setupRenderSettings(toonShader, view, projection, finalTransform, model.color, ALPHA_LAYER_2);
+        }
+        glCullFace(GL_BACK);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+    }
+}
+
+/*
+Model render auxiliary function for triple layers.
+*/
+void modelRenderAux(
+    const std::vector<model::Model>& models_layer1,
+    const std::vector<model::Model>& models_layer2,
+    const std::vector<model::Model>& models_layer3,
+    unsigned int toonShader,
+    unsigned int outlineShader,
+    const glm::mat4& view,
+    const glm::mat4& projection
+) {
+    // Render all models
+    for (const struct model::Model& model : models_layer1) {
+
+        // Apply rotation around molecule center, then translate back to molecule center
+        glm::mat4 finalTransform = modelRotation * model.transform;
+        
+        // First pass: render outline
+        setupOutlineSettings(outlineShader, view, projection, finalTransform, ALPHA_LAYER_1);
+        glCullFace(GL_FRONT);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+
+        // Second pass: render toon shading
+        if (OVERWRITE_COLOR){
+            setupRenderSettings(toonShader, view, projection, finalTransform, COLOR_LAYER_1, ALPHA_LAYER_1);
+        } else {
+            setupRenderSettings(toonShader, view, projection, finalTransform, model.color, ALPHA_LAYER_1);
+        }
+        glCullFace(GL_BACK);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+    }
+
+    for (const struct model::Model& model : models_layer2) {
+        // Apply rotation around molecule center, then translate back to molecule center
+        glm::mat4 finalTransform = modelRotation * model.transform;
+        
+        // First pass: render outline
+        setupOutlineSettings(outlineShader, view, projection, finalTransform, ALPHA_LAYER_1);
+        glCullFace(GL_FRONT);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+
+        // Second pass: render toon shading
+        if (OVERWRITE_COLOR){
+            setupRenderSettings(toonShader, view, projection, finalTransform, COLOR_LAYER_2, ALPHA_LAYER_1);
+        } else {
+            setupRenderSettings(toonShader, view, projection, finalTransform, model.color, ALPHA_LAYER_1);
+        }
+        glCullFace(GL_BACK);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+    }
+
+    for (const struct model::Model& model : models_layer3) {
+        // Apply rotation around molecule center, then translate back to molecule center
+        glm::mat4 finalTransform = modelRotation * model.transform;
+        
+        // First pass: render outline
+        setupOutlineSettings(outlineShader, view, projection, finalTransform, ALPHA_LAYER_2);
+        glCullFace(GL_FRONT);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+
+        // Second pass: render toon shading
+        if (OVERWRITE_COLOR){
+            setupRenderSettings(toonShader, view, projection, finalTransform, COLOR_LAYER_3, ALPHA_LAYER_2);
+        } else {
+            setupRenderSettings(toonShader, view, projection, finalTransform, model.color, ALPHA_LAYER_2);
+        }
+        glCullFace(GL_BACK);
+        glBindVertexArray(model.VAO);
+        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+    }
+}
 
 int main(int argc, char* argv[])
 {
     // Parse command line arguments
-    std::string filename = "./asset/C60-Ih.xyz";
+    // std::string filename = "./asset/C60-Ih.xyz";
+    std::vector<std::string> filenameVec;
     if (argc > 1) {
+        // Accept any length of argument
+        // and extend filenameVec
+        for (int i = 1; i < argc; i++) {
+            filenameVec.push_back(argv[i]);
+        }
+
         std::string arg = argv[1];
-        filename = arg;
+        // filename = arg;
 
         // -h or --help
         if (arg == "-h" || arg == "--help") {
@@ -230,9 +436,13 @@ int main(int argc, char* argv[])
     printDescription();
 
     // Load multiple models
-    chem::Xyz xyz = chem::Xyz(filename);
-    xyz.autoCentering();
-    std::vector<model::Model> models = model::loadMoleculeModel(xyz);
+    // chem::Xyz xyz = chem::Xyz(filename);
+    std::vector<std::vector<model::Model>> modelsVec;
+    for (const std::string& filename : filenameVec) {
+        chem::Xyz xyz = chem::Xyz(filename);
+        xyz.autoCentering();
+        modelsVec.push_back(model::loadMoleculeModel(xyz, MODEL_MODEL_CPK));
+    }
 
     // Load shaders
     unsigned int toonShader = loadShader("./src/shaders/toon.vert", "./src/shaders/toon.frag");
@@ -250,30 +460,47 @@ int main(int argc, char* argv[])
             SCR_WIDTH * orthoScalingFactor,
             -SCR_HEIGHT * orthoScalingFactor,
             SCR_HEIGHT * orthoScalingFactor,
-            -100.0f, 100.0f
+            CUE_CUTOFF_FRONT, CUE_CUTOFF_BACK
         );
-        
-        // Render all models
-        for (const struct model::Model& model : models) {
-            // Apply rotation around molecule center, then translate back to molecule center
-            glm::mat4 finalTransform = modelRotation * model.transform;
-            
-            // First pass: render outline
-            setupOutlineSettings(outlineShader, view, projection, finalTransform);
-            glCullFace(GL_FRONT);
-            glBindVertexArray(model.VAO);
-            glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
 
-            // Second pass: render toon shading
-            setupRenderSettings(toonShader, view, projection, finalTransform, model.color);
-            glCullFace(GL_BACK);
-            glBindVertexArray(model.VAO);
-            glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+        if (modelsVec.size() == 1) {
+            modelRenderAux(
+                modelsVec[0],
+                toonShader, outlineShader,
+                view,
+                projection
+            );
+        } else if (modelsVec.size() == 2) {
+            modelRenderAux(
+                modelsVec[0], modelsVec[1],
+                toonShader, outlineShader,
+                view,
+                projection
+            );
+        } else if (modelsVec.size() == 3) {
+            modelRenderAux(
+                modelsVec[0], modelsVec[1], modelsVec[2],
+                toonShader, outlineShader,
+                view,
+                projection
+            );
+        } else {
+            std::cout << "Error: Invalid number of layers" << std::endl;
+            return -1;
         }
 
         // Check if export is requested
         if (exportRequested) {
-            exportHighResPNG(window, models, toonShader, outlineShader);
+            if (modelsVec.size() == 1) {
+                exportHighResPNG(window, modelsVec[0], toonShader, outlineShader);
+            } else if (modelsVec.size() == 2) {
+                exportHighResPNG(window, modelsVec[0], modelsVec[1], toonShader, outlineShader);
+            } else if (modelsVec.size() == 3) {
+                exportHighResPNG(window, modelsVec[0], modelsVec[1], modelsVec[2], toonShader, outlineShader);
+            } else {
+                std::cout << "Error: Invalid number of layers" << std::endl;
+                return -1;
+            }
             exportRequested = false;
         }
         
@@ -283,7 +510,9 @@ int main(int argc, char* argv[])
     }
     
     // Clean up resources
-    model::cleanupModels(models);
+    for (std::vector<model::Model>& models : modelsVec) {
+        model::cleanupModels(models);
+    }
     glDeleteProgram(toonShader);
     glDeleteProgram(outlineShader);
     
@@ -292,9 +521,12 @@ int main(int argc, char* argv[])
 }
 
 // Export high-resolution PNG image
-void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& models, 
-                     unsigned int toonShader, unsigned int outlineShader)
-{
+void exportHighResPNG(
+    GLFWwindow* window,
+    const std::vector<model::Model>& models, 
+    unsigned int toonShader,
+    unsigned int outlineShader
+) {
     // Get current window size
     int currentWidth, currentHeight;
     glfwGetFramebufferSize(window, &currentWidth, &currentHeight);
@@ -356,24 +588,261 @@ void exportHighResPNG(GLFWwindow* window, const std::vector<model::Model>& model
     );
     
     // Render all models at high resolution
-    for (const auto& model : models) {
-        glm::mat4 finalTransform = modelRotation * model.transform;
-        
-        // First pass: render outline
-        setupOutlineSettings(outlineShader, view, projection, finalTransform);
-        
-        glCullFace(GL_FRONT);
-        glBindVertexArray(model.VAO);
-        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
-        
-        // Second pass: render toon shading
-        setupRenderSettings(toonShader, view, projection, finalTransform, model.color);
-        
-        glCullFace(GL_BACK);
-        glBindVertexArray(model.VAO);
-        glDrawArrays(GL_TRIANGLES, 0, model.vertexCount);
+    modelRenderAux(
+        models,
+        toonShader, outlineShader,
+        view, projection
+    );
+
+    // Read pixels from framebuffer
+    unsigned char* pixels = new unsigned char[highResWidth * highResHeight * 3];
+    glReadPixels(0, 0, highResWidth, highResHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    
+    // Flip image vertically (OpenGL renders upside down)
+    unsigned char* flippedPixels = new unsigned char[highResWidth * highResHeight * 3];
+    for (int y = 0; y < highResHeight; y++) {
+        for (int x = 0; x < highResWidth; x++) {
+            int srcIndex = (y * highResWidth + x) * 3;
+            int dstIndex = ((highResHeight - 1 - y) * highResWidth + x) * 3;
+            flippedPixels[dstIndex] = pixels[srcIndex];
+            flippedPixels[dstIndex + 1] = pixels[srcIndex + 1];
+            flippedPixels[dstIndex + 2] = pixels[srcIndex + 2];
+        }
     }
     
+    // Generate filename with timestamp
+    std::time_t now = std::time(0);
+    std::tm* timeinfo = std::localtime(&now);
+    std::stringstream ss;
+    ss << "molecule_export_" 
+       << std::setfill('0') << std::setw(4) << (timeinfo->tm_year + 1900)
+       << std::setfill('0') << std::setw(2) << (timeinfo->tm_mon + 1)
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_mday << "_"
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_hour
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_min
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_sec << ".png";
+    std::string filename = ss.str();
+    
+    // Save PNG image
+    if (stbi_write_png(filename.c_str(), highResWidth, highResHeight, 3, flippedPixels, highResWidth * 3)) {
+        std::cout << "High-resolution PNG exported successfully: " << filename 
+                  << " (" << highResWidth << "x" << highResHeight << ")" << std::endl;
+    } else {
+        std::cout << "Failed to export PNG image" << std::endl;
+    }
+    
+    // Clean up
+    delete[] pixels;
+    delete[] flippedPixels;
+    
+    // Restore original framebuffer and viewport
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, currentWidth, currentHeight);
+    
+    // Delete framebuffer objects
+    glDeleteFramebuffers(1, &framebuffer);
+    glDeleteTextures(1, &colorTexture);
+    glDeleteRenderbuffers(1, &depthRenderbuffer);
+}
+
+// Export high-resolution PNG image
+void exportHighResPNG(
+    GLFWwindow* window,
+    const std::vector<model::Model>& models_layer1, 
+    const std::vector<model::Model>& models_layer2,
+    unsigned int toonShader,
+    unsigned int outlineShader
+) {
+    // Get current window size
+    int currentWidth, currentHeight;
+    glfwGetFramebufferSize(window, &currentWidth, &currentHeight);
+
+    // Calculate high-resolution size (4x resolution)
+    int highResWidth = currentWidth * HIGHR_RES_FACTOR;
+    int highResHeight = currentHeight * HIGHR_RES_FACTOR;
+
+    // Create framebuffer for high-resolution rendering
+    unsigned int framebuffer;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    // Create color texture
+    unsigned int colorTexture;
+    glGenTextures(1, &colorTexture);
+    glBindTexture(GL_TEXTURE_2D, colorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, highResWidth, highResHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
+
+    // Create depth render buffer
+    unsigned int depthRenderbuffer;
+    glGenRenderbuffers(1, &depthRenderbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthRenderbuffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, highResWidth, highResHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRenderbuffer);
+
+    // Check framebuffer completeness
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cout << "ERROR: Framebuffer not complete!" << std::endl;
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &framebuffer);
+        glDeleteTextures(1, &colorTexture);
+        glDeleteRenderbuffers(1, &depthRenderbuffer);
+        return;
+    }
+
+    // Set viewport for high-resolution rendering
+    glViewport(0, 0, highResWidth, highResHeight);
+
+    // Clear framebuffer
+    glClearColor(BACKGROUND_COLOR[0], BACKGROUND_COLOR[1], BACKGROUND_COLOR[2], 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    // Create transformation matrices for high-resolution rendering
+    glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    glm::mat4 projection = glm::ortho(
+        -(float)highResWidth * orthoScalingFactor / HIGHR_RES_FACTOR / 2,  // Scale down by 4x to match original view
+        (float)highResWidth * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
+        -(float)highResHeight * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
+        (float)highResHeight * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
+        CUE_CUTOFF_FRONT, CUE_CUTOFF_BACK
+    );
+
+    // Render all models at high resolution
+    modelRenderAux(
+        models_layer1, models_layer2,
+        toonShader, outlineShader,
+        view, projection
+    );
+
+    // Read pixels from framebuffer
+    unsigned char* pixels = new unsigned char[highResWidth * highResHeight * 3];
+    glReadPixels(0, 0, highResWidth, highResHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    
+    // Flip image vertically (OpenGL renders upside down)
+    unsigned char* flippedPixels = new unsigned char[highResWidth * highResHeight * 3];
+    for (int y = 0; y < highResHeight; y++) {
+        for (int x = 0; x < highResWidth; x++) {
+            int srcIndex = (y * highResWidth + x) * 3;
+            int dstIndex = ((highResHeight - 1 - y) * highResWidth + x) * 3;
+            flippedPixels[dstIndex] = pixels[srcIndex];
+            flippedPixels[dstIndex + 1] = pixels[srcIndex + 1];
+            flippedPixels[dstIndex + 2] = pixels[srcIndex + 2];
+        }
+    }
+    
+    // Generate filename with timestamp
+    std::time_t now = std::time(0);
+    std::tm* timeinfo = std::localtime(&now);
+    std::stringstream ss;
+    ss << "molecule_export_" 
+       << std::setfill('0') << std::setw(4) << (timeinfo->tm_year + 1900)
+       << std::setfill('0') << std::setw(2) << (timeinfo->tm_mon + 1)
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_mday << "_"
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_hour
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_min
+       << std::setfill('0') << std::setw(2) << timeinfo->tm_sec << ".png";
+    std::string filename = ss.str();
+
+    // Save PNG image
+    if (stbi_write_png(filename.c_str(), highResWidth, highResHeight, 3, flippedPixels, highResWidth * 3)) {
+        std::cout << "High-resolution PNG exported successfully: " << filename 
+                  << " (" << highResWidth << "x" << highResHeight << ")" << std::endl;
+    } else {
+        std::cout << "Failed to export PNG image" << std::endl;
+    }
+    
+    // Clean up
+    delete[] pixels;
+    delete[] flippedPixels;
+    
+    // Restore original framebuffer and viewport
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, currentWidth, currentHeight);
+    
+    // Delete framebuffer objects
+    glDeleteFramebuffers(1, &framebuffer);
+    glDeleteTextures(1, &colorTexture);
+    glDeleteRenderbuffers(1, &depthRenderbuffer);
+}
+
+// Export high-resolution PNG image
+void exportHighResPNG(
+    GLFWwindow* window,
+    const std::vector<model::Model>& models_layer1, 
+    const std::vector<model::Model>& models_layer2,
+    const std::vector<model::Model>& models_layer3,
+    unsigned int toonShader,
+    unsigned int outlineShader
+) {
+    // Get current window size
+    int currentWidth, currentHeight;
+    glfwGetFramebufferSize(window, &currentWidth, &currentHeight);
+    
+    // Calculate high-resolution size (4x resolution)
+    int highResWidth = currentWidth * HIGHR_RES_FACTOR;
+    int highResHeight = currentHeight * HIGHR_RES_FACTOR;
+    
+    // Create framebuffer for high-resolution rendering
+    unsigned int framebuffer;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    
+    // Create color texture
+    unsigned int colorTexture;
+    glGenTextures(1, &colorTexture);
+    glBindTexture(GL_TEXTURE_2D, colorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, highResWidth, highResHeight, 0, 
+                 GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 
+                          GL_TEXTURE_2D, colorTexture, 0);
+    
+    // Create depth renderbuffer
+    unsigned int depthRenderbuffer;
+    glGenRenderbuffers(1, &depthRenderbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthRenderbuffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 
+                         highResWidth, highResHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, 
+                             GL_RENDERBUFFER, depthRenderbuffer);
+    
+    // Check framebuffer completeness
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cout << "ERROR: Framebuffer not complete!" << std::endl;
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &framebuffer);
+        glDeleteTextures(1, &colorTexture);
+        glDeleteRenderbuffers(1, &depthRenderbuffer);
+        return;
+    }
+    
+    // Set viewport for high-resolution rendering
+    glViewport(0, 0, highResWidth, highResHeight);
+    
+    // Clear framebuffer
+    glClearColor(BACKGROUND_COLOR[0], BACKGROUND_COLOR[1], BACKGROUND_COLOR[2], 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    // Create transformation matrices for high-resolution rendering
+    glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    glm::mat4 projection = glm::ortho(
+        -(float)highResWidth * orthoScalingFactor / HIGHR_RES_FACTOR / 2,  // Scale down by 4x to match original view
+        (float)highResWidth * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
+        -(float)highResHeight * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
+        (float)highResHeight * orthoScalingFactor / HIGHR_RES_FACTOR / 2,
+        -100.0f, 100.0f
+    );
+
+    // Render all models at high resolution
+    modelRenderAux(
+        models_layer1, models_layer2, models_layer3,
+        toonShader, outlineShader,
+        view, projection
+    );
+
     // Read pixels from framebuffer
     unsigned char* pixels = new unsigned char[highResWidth * highResHeight * 3];
     glReadPixels(0, 0, highResWidth, highResHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels);
@@ -600,10 +1069,10 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     zoom -= (float)yoffset * 0.1f;
-    if (zoom < 0.1f)
-        zoom = 0.1f;
-    if (zoom > 10.0f)
-        zoom = 10.0f;
+    if (zoom < 0.01f)
+        zoom = 0.01f;
+    if (zoom > 100.0f)
+        zoom = 100.0f;
         
     // Update orthographic scaling factor for zoom effect
     orthoScalingFactor = 0.005f / zoom;

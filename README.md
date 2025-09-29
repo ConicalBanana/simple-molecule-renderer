@@ -41,8 +41,13 @@ ln -s build/ToonShading .
 
 ## Basic usages
 
+a) The program could load up to 3 layers of molecules.
+
 ```Bash
+# Single layer example
 ToonShaing ./asset/ps.xyz
+# Double layers example
+ToonShaing ./asset/ps.xyz ./asset/C60-Ih.xyz
 # Or your own xyz file...
 ```
 
@@ -52,6 +57,9 @@ ToonShaing ./asset/ps.xyz
 - ctrl+s for exporting image(4x current resolution, enough for publishing)
 
 You could simply replacing the `.xyz` file path in `main.cpp` with your own `xyz` file path.
+
+b) If you want to change colors or something else,
+then you should just alternate the constant values in `main.cpp`
 
 ## Acknowledgements
 
